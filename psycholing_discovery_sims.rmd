@@ -1,0 +1,191 @@
+---
+title: ""
+output: 
+  html_document: 
+    css: boosh.css
+---
+
+
+### False discovery and friends in psycholinguistics 
+
+**[Timothy Leffel](http://lefft.xyz), NORC at U Chicago**   
+[*draft, updated july23/2017*]
+<hr style="font-size: 20px; color: #0f422f; font-weight: bold; border-bottom: 2px solid DimGray;">
+
+
+### 
+
+**Abstract.** 
+Simulating RT-based psycholinguistics experiments to understand the role of analysis decisions and power in type-i/-ii errors, false discovery rate, and related problems. 
+
+
+#### set up environment
+
+<!-- import google fonts -->
+<link rel="stylesheet" type="text/css"
+  href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,400i,700">
+<link href="https://fonts.googleapis.com/css?family=Roboto+Mono:300,400" rel="stylesheet">
+
+
+```{r warning=FALSE, message=FALSE}
+# NOTE: list of TODO items at bottom of script
+
+# set global chunk options
+knitr::opts_chunk$set(
+  fig.width=10, fig.height=7, warning=FALSE, message=FALSE
+)
+
+# load dependencies
+library("dplyr"); library("magrittr"); library("ggplot2"); library("gridExtra")
+
+# set plot theme
+theme_set(theme_minimal(14))
+
+# set random seed for reproducibility
+set.seed(1234)
+
+# load simulation functions etc.
+source("functions.r")
+```
+
+
+#### simulate a simple experiment
+
+Suppose we're doing an RT experiment + we have just related/unrelated conditions. Further suppose everything is matched on freq/length/etc. (see `functions.r` for definition of `simulate_experiment()` -- will make design more complex/realistic in next iteration).
+
+```{r simulate_expt}
+# simulate the experiment a single time
+dat <- simulate_experiment()
+```
+
+The data look like this: 
+
+```{r}
+# display 10 randomly sampled rows of the data 
+knitr::kable(dat[sample(seq(len=nrow(dat)), size=10), ], digits=2)
+```
+
+We've already specified the number of outlier subjs (in the function def'n), but we'll want to have a couple params around for stuff below. This needs to be cleaned up. 
+
+**TODO (important)**: fix this for clarity -- *need to set global params for the subsetting etc. below. These are already fed into `simulate_experiment()` as default args, but should be passed explicitly from the global environment for transparency. But need to improve/transparent-ize the argument passing structure in the sim pipeline before that is possible).*
+
+```{r}
+# set params for subsetting below [HACK -- FIX THIS SOON]
+n_outlier    <- length(unique(dat$subj[dat$is_outlier=="_outlier"]))
+outlier_subj <- unique(dat$subj[dat$is_outlier=="_outlier"])
+```
+
+
+#### plot the raw RT's
+
+```{r plot_rez}
+# plot the resutls by condition and outlier status 
+# (options: rt, rt_log, rt_ctd, rt_zsc)
+plot_results(dat, rt_col="rt")
+```
+
+*(and summarize them -- need to generalize summary func before can do summaries for other RT measures)*
+
+**TODO:** generalize summary func (prob need to implement it w `enquo()` for smoothness ack)
+
+```{r summarize_rez}
+# summarize the results by relevant grouping vars
+tabs <- summarize_results(dat)
+
+tabs$summary_by_cond
+tabs$summary_by_outlier
+tabs$summary_by_outlier_cond
+```
+
+
+#### plot the raw RT's, with outliers excluded
+
+```{r}
+# plot the raw rt's, but with outlier subj's excluded
+plot_results(dat[dat$is_outlier=="reggie", ], rt_col="rt")
+
+# summarize them too
+summarize_results(dat[dat$is_outlier=="reggie", ])$summary_by_cond
+```
+
+
+#### fit some models [STILL NEEDS WRITTEN]
+
+```{r analysis_chunk} 
+# [THIS IS THE CRUCIAL PART RITE HERE]
+```
+
+**TODO:** encapsulate code in next chunk into a func
+```{r results="hold"}
+# establish + quantify the effect of condition
+fit <- lm(rt ~ cond, data=dat)
+knitr::kable(summary(fit)$coefficients, caption="<br>model: RT ~ condition")
+
+# add outlier:cond interaction as a predictor + fit
+fit_outlier <- lm(rt ~ cond + cond:is_outlier, data=dat)
+knitr::kable(summary(fit_outlier)$coefficients, 
+             caption="<br><br>model: RT ~ condition + condition:outlier")
+
+# evaluate relative fit between the reggie mod + one w outlier interaction term
+anova(fit, fit_outlier) # [c("F","Pr(>F)")]
+```
+
+
+```{r}
+# also: exclude outliers to see how effect size changes relative to `fit`
+fit_excl <- lm(rt ~ cond, data=dat[!dat$subj %in% outlier_subj, ])
+knitr::kable(summary(fit_excl)$coefficients)
+```
+
+<hr><hr>
+<br><br><br><br><br><br>
+
+
+
+#### notes to self 
+
+```{r}
+# can use either strategy for passing metadata
+# comment(dat) <- "boosh!"
+# attr(dat, "tim_note") = "boosh!"
+
+# NOTE: also fit the model on logged rt's 
+# (can use scaled to get sd units too)
+# fit_log <- lm(rt_log ~ cond, data=dat); summary(fit_log)
+
+# flow of data in sim setup is: 
+# generate_data() %>% introduce_outliers() %>% transform_rts()
+
+# NOTE: the attributes of dat$rt_zsc are mean and sd ("center" and "scale")
+
+# width of individual kable()s, use arg: table.attr = "style='width:XXX%;'"
+```
+
+<!-- don't want to evaluate this chunk -- might be useful once we start modeling real data tho -->
+```{r plot_scaled_rts, eval=FALSE, include=FALSE, echo=FALSE}
+#### code scraps, misc etc.
+
+# don't want to evaluate this chunk -- 
+# might be useful once we start modeling real data tho
+
+#### plot the logged RT's
+
+# plot the logged rt's
+plot_results(dat, rt_col="rt_log")
+
+#### plot the centered RT's
+
+# plot the centered rt's
+plot_results(dat, rt_col="rt_ctd")
+
+#### plot the z-scored RT's
+
+# plot the logged rt's
+plot_results(dat, rt_col="rt_zsc")
+```
+
+
+
+
+
+

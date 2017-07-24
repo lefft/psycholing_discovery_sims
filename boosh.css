@@ -1,0 +1,82 @@
+
+/* NOTE: notes + scraps etc. at bottom */
+
+body {
+  padding: 10px;
+  font-size: 12pt;
+  font-family: 'Open Sans', sans-serif;
+}
+
+body .main-container {
+  max-width: 1000px;
+}
+
+h3 { 
+  font-size: 26px;
+  color: #0f422f;
+  font-weight: bolder;
+  padding-bottom: 6px;
+  margin-bottom: 5px;
+}
+
+h4 { 
+  font-size: 24px;
+  color: #0f754f;
+  font-weight: bold;
+  margin-top: 75px;
+  border-bottom: 1px solid DarkGray;
+  padding-bottom: 6px;
+  margin-bottom: 15px;
+}
+
+h5 {
+  font-size: 20px;
+  color: white;
+  background-color: SlateGray;
+  padding: 4px;
+  border-radius: 5px;
+  font-weight: bold;
+  margin-top: 50px;
+  margin-bottom: 6px;
+}
+
+.table {
+  width: 85%;
+  margin: 0 auto;
+}
+
+li {
+  padding: 3px;
+}
+
+code {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+}
+
+blockquote {
+  font-style: italic;
+}
+
+pre {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+p {
+  margin-top: 30px;
+  margin-bottom: 15px;
+}
+
+
+/*<!-- could put in body, but better to use .main-container selector(?) -->
+<!-- width: 2000px; -->
+<!-- margin: 0 auto; -->
+*/
+/*<!-- note that body.main-container has a default max width of 940px -->
+<!-- seems nicer if we set it to ~1250px -->
+*/
+/*<!-- was on h3; border-bottom: 2px solid DimGray; -->*/
+
