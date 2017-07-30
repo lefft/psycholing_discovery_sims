@@ -5,6 +5,7 @@ output:
     css: boosh.css
 ---
 
+<!-- first 5k in 35s (w 1500 sims) -->
 <!-- this can be considered a "white box" system...  -->
 
 We want to simulate a realistic scenario, but we also want to understand why it works the way it does. The approach that we will take is to start by simulating a very simplified scenario, and understanding precisely how it works and which factors it is sensitive to. Then, we will iteratively make the scenario more complicated, each time pausing to ensure we understand the influence of each added layer of abstraction. What we will end up with is a scenario that has all of the parameters and sources of variation as a genuine, lexical-decision based priming study, that uses accuracy and reaction time as dependent measures, and includes by-subject and by-item crossed random effects. 
@@ -18,10 +19,11 @@ We want to simulate a realistic scenario, but we also want to understand why it 
   - [Step 6: simulate case where true effect is obscured](#step6)
   - [Step 7: write the abstract + submit :)](#step7)
 
-```{r}
+```{r echo=FALSE}
 knitr::opts_chunk$set(message=FALSE)
 
-# don't load packages until after sim is run
+# keep the environment slim until after sim runs and analysis
+# TODO: figger out how to load `lme4::` in a slim but also transparent way
 run_sim <- TRUE
 if (!run_sim){
   packs <- c("dplyr","magrittr","reshape2","ggplot2","gridExtra")
@@ -37,6 +39,7 @@ save_res <- TRUE
 
 #### Step 0: replicate chemla sim {#step0}
 
+##### 0.1 set global parameters 
 
 ```{r}
 thetas <- c(0,.025,.05,.075,.1)
@@ -44,10 +47,18 @@ regions <- c("hi","lo")
 strats <- c("exclude","impute")
 num_sims <- 100 # 3000 # 42:40 # 2000 17:45 # 1000 4:40
 num_data_points <- 40
+```
 
+##### 0.2 simulate data, store as `num_sims` $\times$ `num_data_points` matrix
+
+```{r}
 # simulate the experiment `num_sims` many times
-sim_data <- nes_sim_data(num_sims, num_data_points, mu=0, sigma=1)
+sim_data <- nes_sim_data(num_sims, num_data_points, mu=700, sigma=100)
+```
 
+##### 0.3 set up analysis infrastructure 
+
+```{r}
 # df to hold individual sim results inside of loop
 dat <- data.frame(
   data = numeric(num_data_points), 
@@ -59,6 +70,7 @@ dat <- data.frame(
 cont <- make_simshell(num_sims, thetas, strats)
 ```
 
+##### 0.4 analyze data and conduct hypothesis test at each simulation 
 
 ```{r}
 ### analyze the simulated data ---------------
@@ -67,73 +79,76 @@ for (x in seq_len(nrow(cont))){
   # (i.e. get rid of any changes from previous iteration)
   dat$data <- sim_data[, cont$sim[x]]
   
+  # what is the difference in means for the raw simulated data
   cont$diffmeans_raw[x] <- 
-    mean(dat$data[dat$cond=="A"]) - 
-    mean(dat$data[dat$cond=="B"])
+    mean(dat$data[dat$cond=="A"]) - mean(dat$data[dat$cond=="B"])
   
+  # values we're going to remove/treat as outliers
   trim_top <- dat$data[
     dat$data > quantile(dat$data, 1-cont$trim_top[x])
   ]
   trim_bot <- dat$data[
     dat$data < quantile(dat$data, cont$trim_bot[x])
   ]
-  
+  # record how many values we're treating as outliers
   cont$trimmed_top[x] <- length(trim_top)
   cont$trimmed_bot[x] <- length(trim_bot)
   
   if (cont$strat[x]=="exclude"){
-    # remove data points by setting to NA
+    # remove outlier data points by setting to NA
     dat$data[dat$data %in% c(trim_top,trim_bot)] <- NA
   }
   if (cont$strat[x]=="impute"){
-    # impute by replacing w the threshold
+    # "impute" outliers by replacing w the appropriate threshold
     dat$data[dat$data %in% trim_top] <- quantile(dat$data, 1-cont$trim_top[x])
     dat$data[dat$data %in% trim_bot] <- quantile(dat$data, cont$trim_bot[x])
     
-    # or could impute by replacing w the grand mean...
+    # TODO: could also impute by replacing w the grand mean...
+    #       [probably better...] -- or by-subj mean?! or by-item?!
     # dat$data[dat$data %in% c(trim_top,trim_bot)] <- 
     #   mean(dat$data[!dat$data %in% c(trim_top,trim_bot)])
   }
-  # record meandiff
+  # record meandiff after outliers have been transformed or removed (or not)
   cont$diffmeans_cut[x] <- 
     mean(dat$data[dat$cond=="A"], na.rm=TRUE) - 
     mean(dat$data[dat$cond=="B"], na.rm=TRUE)
+  
+  ### execute data analysis and conduct hypothesis test -----------------
+  # TODO: swap to linear regression; eventually use mixed model; also anova
   # perform t-test
-  res <- t.test(dat$data[dat$cond=="A"],
-                dat$data[dat$cond=="B"])
-  # record the results
-  cont$tval[x] <- unname(round(res$statistic, 2))
-  cont$pval[x] <- round(res$p.value, 4)
-  cont$confint[x] <- 
-    paste(round(res$conf.int, 3), collapse="||")
+  res <- t.test(dat$data[dat$cond=="A"], dat$data[dat$cond=="B"])
+  # record the results: tval, pval, ci
+  # TODO: add standard error to output(??)
+  cont$tval[x] <- unname(res$statistic)
+  cont$pval[x] <- res$p.value 
+  cont$confint[x] <- paste(round(res$conf.int, 3), collapse="||")
   
   # print a nice friendly message <3
-  message(paste0("okee, done w iteration ", x, 
-                 " out of ", nrow(cont)))
-}
+  message(paste0("okee, done w iteration ", x, " out of ", nrow(cont)))
+} # end loop; remove temp objects
 rm(trim_top); rm(trim_bot); rm(res)
 ```
 
 
 ```{r}
-### post-process sims -------------
+### post-process sim data -------------
 
 # total data points per sim
 cont$total_n <- num_data_points
 
-# total data trimmed out
+# total data trimmed out per iteration
 cont$trimmed_total <- cont$trimmed_top + cont$trimmed_bot
 
-# whether data was trimmed at all
+# whether data was trimmed at all in an iteration
 cont$is_trimmed <- ifelse(cont$trimmed_total==0, FALSE, TRUE)
 
-# recode strat of data points that are not trimmed
+# recode strat of iterations whose data points were not trimmed
 cont$strat <- ifelse(!cont$is_trimmed, "nothing", cont$strat)
 
 # remove duplicate rows (shd be half of all strat=="nothing" rows)
 cont <- cont[!duplicated(cont), ]
 
-# write the sims to disk if desired
+# write the sims to disk if desired (switch at top)
 if (save_res){
   dnam <- paste0("out/sim_results-",num_sims,"_sims-july29.csv")
   write.csv(cont, dnam, row.names=FALSE)
@@ -142,7 +157,7 @@ if (save_res){
 
 
 ```{r}
-# now load stuff if we didn't earlier
+# now load stuff if we didn't earlier (everything above here is base)
 if (run_sim){
   packs <- c("dplyr","magrittr","reshape2","ggplot2","gridExtra")
   lefftpack::quiet_attach(packs)
@@ -155,11 +170,11 @@ if (run_sim){
 
 # define some useful subsets and list them up to iterate over
 subsets <- list(
-  trim_none=cont[cont$trim_total == 0, ], 
-  trim_top=cont[cont$trim_top   != 0, ], 
-  trim_bot=cont[cont$trim_bot   != 0, ], 
-  strat_excl=cont[cont$strat=="exclude", ], 
-  strat_imp=cont[cont$strat=="impute",  ]
+  trim_none  = cont[cont$trimmed_total == 0, ], 
+  trim_top   = cont[cont$trimmed_top != 0, ], 
+  trim_bot   = cont[cont$trimmed_bot != 0, ], 
+  strat_excl = cont[cont$strat=="exclude", ], 
+  strat_imp  = cont[cont$strat=="impute",  ]
 )
 
 # define some useful summary funcs for simulated p-vals
@@ -212,33 +227,56 @@ summ %>% head(n=10) %>% knitr::kable(digits=4)
 ```
 
 
-```{r eval=FALSE}
+```{r include=FALSE, eval=FALSE}
 # not run
-View(dplyr::mutate_if(cont, is.numeric, round, digits=3))
-View(dplyr::mutate_if(summ, is.numeric, round, digits=3))
+# View(dplyr::mutate_if(cont, is.numeric, round, digits=3))
+# View(dplyr::mutate_if(summ, is.numeric, round, digits=3))
 
-summ %>% group_by(sim, is_trimmed) %>% summarize(
-  min_p = min(min_p),
-  max_p = max(max_p),
-  mean_mean_p = mean(mean_p),
-  mean_mean_t = mean(mean_t)
-) %>% mutate_if(is.numeric, round, digits=3) %>% View()
+# summ %>% group_by(sim, is_trimmed) %>% summarize(
+#   min_p = min(min_p),
+#   max_p = max(max_p),
+#   mean_mean_p = mean(mean_p),
+#   mean_mean_t = mean(mean_t)
+# ) %>% mutate_if(is.numeric, round, digits=3) 
 
-summ %>% group_by(sim, is_trimmed) %>% summarize(
-  min_p = min(min_p),
-  max_p = max(max_p),
-  mean_mean_p = mean(mean_p),
-  mean_mean_t = mean(mean_t)
-) %>% group_by(is_trimmed) %>% summarize(
-  n = n(),
-  num_fp = sum(min_p < .05),
-  prop_fp = num_fp / n,
-  mean_min_p = mean(min_p),
-  mean_mean_mean_t = mean(mean_mean_t)
-) %>% 
-  mutate_if(is.numeric, round, digits=3) %>% View()
+simsum <- cont %>% group_by(sim, strat) %>% summarize(
+  num_rows   = n(), 
+  lo_pval    = min(pval),
+  hi_pval    = max(pval),
+  lo_p_tval  = mean(tval[pval==min(pval)]),
+  tval_isavg = length(tval[pval==min(pval)]) > 1
+) 
 
 
+grandmeans <- simsum %>% group_by(strat) %>% summarize(
+  nsim = n(),
+  num_fp = sum(lo_pval < .05),
+  prop_fp = num_fp / nsim,
+  se_fp = lefftpack::se_prop(p=prop_fp, n=nsim), 
+  mean_quant05       = mean(quantile(lo_pval)),
+  mean_lo_pval = mean(lo_pval),
+  sd_lo_pval = sd(lo_pval),
+  mean_hi_pval = mean(hi_pval),
+  sd_hi_pval = sd(hi_pval),
+  mean_lo_p_tval = mean(lo_p_tval),
+  sd_lo_p_tval = sd(lo_p_tval)
+)
+
+knitr::kable(grandmeans, digits=3)
+
+
+ggplot(grandmeans, aes(x=strat, y=prop_fp)) + 
+  geom_bar(stat="identity", position="dodge") + 
+  geom_errorbar(
+    aes(x=strat, ymin=prop_fp-se_fp, ymax=prop_fp+se_fp), 
+    position="dodge", width=0
+  )
+
+# TODO: see what the diff is for false *negatives* -- if also bad, 
+#       then seems like excluding is never good...or even conservative?! 
+#       
+# TODO: another thing to do wd be to cut off anything e.g. 
+#       2sd's above the mean; or the top + bottom 5 pctiles; ...
 ```
 
 

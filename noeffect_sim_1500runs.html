@@ -132,30 +132,24 @@ $(document).ready(function () {
 <li><a href="#step6">Step 6: simulate case where true effect is obscured</a></li>
 <li><a href="#step7">Step 7: write the abstract + submit :)</a></li>
 </ul>
-<pre class="r"><code>knitr::opts_chunk$set(message=FALSE)
-
-# don't load packages until after sim is run
-run_sim &lt;- TRUE
-if (!run_sim){
-  packs &lt;- c(&quot;dplyr&quot;,&quot;magrittr&quot;,&quot;reshape2&quot;,&quot;ggplot2&quot;,&quot;gridExtra&quot;)
-  lefftpack::quiet_attach(packs)
-}
-source(&quot;noeffect_sims_functions.r&quot;)
-
-# want to save results on this run?
-save_res &lt;- TRUE</code></pre>
 <div id="step0" class="section level4">
 <h4>Step 0: replicate chemla sim</h4>
+<div id="set-global-parameters" class="section level5">
+<h5>0.1 set global parameters</h5>
 <pre class="r"><code>thetas &lt;- c(0,.025,.05,.075,.1)
 regions &lt;- c(&quot;hi&quot;,&quot;lo&quot;)
 strats &lt;- c(&quot;exclude&quot;,&quot;impute&quot;)
-num_sims &lt;- 100 # 3000 # 42:40 # 2000 17:45 # 1000 4:40
-num_data_points &lt;- 40
-
-# simulate the experiment `num_sims` many times
-sim_data &lt;- nes_sim_data(num_sims, num_data_points, mu=0, sigma=1)
-
-# df to hold individual sim results inside of loop
+num_sims &lt;- 1500 # 3000 # 42:40 # 2000 17:45 # 1000 4:40
+num_data_points &lt;- 40</code></pre>
+</div>
+<div id="simulate-data-store-as-num_sims-times-num_data_points-matrix" class="section level5">
+<h5>0.2 simulate data, store as <code>num_sims</code> <span class="math inline">\(\times\)</span> <code>num_data_points</code> matrix</h5>
+<pre class="r"><code># simulate the experiment `num_sims` many times
+sim_data &lt;- nes_sim_data(num_sims, num_data_points, mu=0, sigma=1)</code></pre>
+</div>
+<div id="set-up-analysis-infrastructure" class="section level5">
+<h5>0.3 set up analysis infrastructure</h5>
+<pre class="r"><code># df to hold individual sim results inside of loop
 dat &lt;- data.frame(
   data = numeric(num_data_points), 
   cond = rep(c(&quot;A&quot;,&quot;B&quot;), each=num_data_points/2),
@@ -164,56 +158,62 @@ dat &lt;- data.frame(
 
 # make a container to catch the sim results inside of loop
 cont &lt;- make_simshell(num_sims, thetas, strats)</code></pre>
+</div>
+<div id="analyze-data-and-conduct-hypothesis-test-at-each-simulation" class="section level5">
+<h5>0.4 analyze data and conduct hypothesis test at each simulation</h5>
 <pre class="r"><code>### analyze the simulated data ---------------
 for (x in seq_len(nrow(cont))){
   # reset the data for whatever sim we're on 
   # (i.e. get rid of any changes from previous iteration)
   dat$data &lt;- sim_data[, cont$sim[x]]
   
+  # what is the difference in means for the raw simulated data
   cont$diffmeans_raw[x] &lt;- 
-    mean(dat$data[dat$cond==&quot;A&quot;]) - 
-    mean(dat$data[dat$cond==&quot;B&quot;])
+    mean(dat$data[dat$cond==&quot;A&quot;]) - mean(dat$data[dat$cond==&quot;B&quot;])
   
+  # values we're going to remove/treat as outliers
   trim_top &lt;- dat$data[
     dat$data &gt; quantile(dat$data, 1-cont$trim_top[x])
   ]
   trim_bot &lt;- dat$data[
     dat$data &lt; quantile(dat$data, cont$trim_bot[x])
   ]
-  
+  # record how many values we're treating as outliers
   cont$trimmed_top[x] &lt;- length(trim_top)
   cont$trimmed_bot[x] &lt;- length(trim_bot)
   
   if (cont$strat[x]==&quot;exclude&quot;){
-    # remove data points by setting to NA
+    # remove outlier data points by setting to NA
     dat$data[dat$data %in% c(trim_top,trim_bot)] &lt;- NA
   }
   if (cont$strat[x]==&quot;impute&quot;){
-    # impute by replacing w the threshold
+    # &quot;impute&quot; outliers by replacing w the appropriate threshold
     dat$data[dat$data %in% trim_top] &lt;- quantile(dat$data, 1-cont$trim_top[x])
     dat$data[dat$data %in% trim_bot] &lt;- quantile(dat$data, cont$trim_bot[x])
     
-    # or could impute by replacing w the grand mean...
+    # TODO: could also impute by replacing w the grand mean...
+    #       [probably better...] -- or by-subj mean?! or by-item?!
     # dat$data[dat$data %in% c(trim_top,trim_bot)] &lt;- 
     #   mean(dat$data[!dat$data %in% c(trim_top,trim_bot)])
   }
-  # record meandiff
+  # record meandiff after outliers have been transformed or removed (or not)
   cont$diffmeans_cut[x] &lt;- 
     mean(dat$data[dat$cond==&quot;A&quot;], na.rm=TRUE) - 
     mean(dat$data[dat$cond==&quot;B&quot;], na.rm=TRUE)
+  
+  ### execute data analysis and conduct hypothesis test -----------------
+  # TODO: swap to linear regression; eventually use mixed model; also anova
   # perform t-test
-  res &lt;- t.test(dat$data[dat$cond==&quot;A&quot;],
-                dat$data[dat$cond==&quot;B&quot;])
-  # record the results
+  res &lt;- t.test(dat$data[dat$cond==&quot;A&quot;], dat$data[dat$cond==&quot;B&quot;])
+  # record the results: tval, pval, ci
+  # TODO: add standard error to output(??)
   cont$tval[x] &lt;- unname(round(res$statistic, 2))
   cont$pval[x] &lt;- round(res$p.value, 4)
-  cont$confint[x] &lt;- 
-    paste(round(res$conf.int, 3), collapse=&quot;||&quot;)
+  cont$confint[x] &lt;- paste(round(res$conf.int, 3), collapse=&quot;||&quot;)
   
   # print a nice friendly message &lt;3
-  message(paste0(&quot;okee, done w iteration &quot;, x, 
-                 &quot; out of &quot;, nrow(cont)))
-}
+  message(paste0(&quot;okee, done w iteration &quot;, x, &quot; out of &quot;, nrow(cont)))
+} # end loop; remove temp objects
 rm(trim_top); rm(trim_bot); rm(res)</code></pre>
 <pre class="r"><code>### post-process sims -------------
 
@@ -246,9 +246,9 @@ if (run_sim){
 
 # define some useful subsets and list them up to iterate over
 subsets &lt;- list(
-  trim_none=cont[cont$trim_total == 0, ], 
-  trim_top=cont[cont$trim_top   != 0, ], 
-  trim_bot=cont[cont$trim_bot   != 0, ], 
+  trim_none=cont[cont$trimmed_total == 0, ], 
+  trim_top=cont[cont$trimmed_top   != 0, ], 
+  trim_bot=cont[cont$trimmed_bot   != 0, ], 
   strat_excl=cont[cont$strat==&quot;exclude&quot;, ], 
   strat_imp=cont[cont$strat==&quot;impute&quot;,  ]
 )
@@ -271,37 +271,17 @@ lapply(foncs, function(f){
   sapply(subsets, function(df) f(df))
 })</code></pre>
 <pre><code>## $signifs
-## $signifs$trim_none
-## &lt; table of extent 0 &gt;
-## 
-## $signifs$trim_top
-## 
-## FALSE  TRUE 
-##  3842   158 
-## 
-## $signifs$trim_bot
-## 
-## FALSE  TRUE 
-##  3845   155 
-## 
-## $signifs$strat_excl
-## 
-## FALSE  TRUE 
-##  2317    83 
-## 
-## $signifs$strat_imp
-## 
-## FALSE  TRUE 
-##  2293   107 
-## 
+##       trim_none trim_top trim_bot strat_excl strat_imp
+## FALSE      1436    57160    57138      34314     34294
+## TRUE         64     2840     2862       1686      1706
 ## 
 ## $prop_signif
 ##  trim_none   trim_top   trim_bot strat_excl  strat_imp 
-##        NaN     0.0395     0.0388     0.0346     0.0446 
+##     0.0427     0.0473     0.0477     0.0468     0.0474 
 ## 
 ## $quant_at
 ##  trim_none.5%   trim_top.5%   trim_bot.5% strat_excl.5%  strat_imp.5% 
-##            NA         0.059         0.059         0.069         0.053</code></pre>
+##         0.059         0.053         0.052         0.054         0.053</code></pre>
 <pre class="r"><code>### per-sim summaries -------------
 
 summ &lt;- cont %&gt;% group_by(sim, strat, is_trimmed) %&gt;% summarize(
@@ -334,37 +314,37 @@ summ %&gt;% head(n=10) %&gt;% knitr::kable(digits=4)</code></pre>
 <td align="left">exclude</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.3507</td>
-<td align="right">0.7736</td>
-<td align="right">0.9963</td>
-<td align="right">0.7248</td>
-<td align="right">-0.3167</td>
-<td align="right">0.2054</td>
-<td align="right">0.3520</td>
+<td align="right">0.0538</td>
+<td align="right">0.2372</td>
+<td align="right">0.9754</td>
+<td align="right">0.3244</td>
+<td align="right">1.1171</td>
+<td align="right">0.2423</td>
+<td align="right">0.5104</td>
 </tr>
 <tr class="even">
 <td align="right">1</td>
 <td align="left">impute</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.2606</td>
-<td align="right">0.3501</td>
-<td align="right">0.3821</td>
-<td align="right">0.3337</td>
-<td align="right">-0.9833</td>
-<td align="right">0.0403</td>
-<td align="right">0.0847</td>
+<td align="right">0.2593</td>
+<td align="right">0.3630</td>
+<td align="right">0.6862</td>
+<td align="right">0.4097</td>
+<td align="right">0.8512</td>
+<td align="right">0.1178</td>
+<td align="right">0.2066</td>
 </tr>
 <tr class="odd">
 <td align="right">1</td>
 <td align="left">nothing</td>
 <td align="left">FALSE</td>
 <td align="right">1</td>
-<td align="right">0.2543</td>
-<td align="right">0.2543</td>
-<td align="right">0.2543</td>
-<td align="right">0.2543</td>
-<td align="right">-1.1600</td>
+<td align="right">0.5080</td>
+<td align="right">0.5080</td>
+<td align="right">0.5080</td>
+<td align="right">0.5080</td>
+<td align="right">0.6700</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
 </tr>
@@ -373,37 +353,37 @@ summ %&gt;% head(n=10) %&gt;% knitr::kable(digits=4)</code></pre>
 <td align="left">exclude</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.3526</td>
-<td align="right">0.6572</td>
-<td align="right">0.9944</td>
-<td align="right">0.6681</td>
-<td align="right">-0.1288</td>
-<td align="right">0.1953</td>
-<td align="right">0.5236</td>
+<td align="right">0.5106</td>
+<td align="right">0.7993</td>
+<td align="right">0.9870</td>
+<td align="right">0.8221</td>
+<td align="right">-0.0946</td>
+<td align="right">0.1400</td>
+<td align="right">0.2848</td>
 </tr>
 <tr class="odd">
 <td align="right">2</td>
 <td align="left">impute</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.6432</td>
-<td align="right">0.8022</td>
-<td align="right">0.9958</td>
-<td align="right">0.8134</td>
-<td align="right">0.2408</td>
-<td align="right">0.1162</td>
-<td align="right">0.1522</td>
+<td align="right">0.9439</td>
+<td align="right">0.9753</td>
+<td align="right">0.9898</td>
+<td align="right">0.9716</td>
+<td align="right">0.0350</td>
+<td align="right">0.0167</td>
+<td align="right">0.0228</td>
 </tr>
 <tr class="even">
 <td align="right">2</td>
 <td align="left">nothing</td>
 <td align="left">FALSE</td>
 <td align="right">1</td>
-<td align="right">0.7587</td>
-<td align="right">0.7587</td>
-<td align="right">0.7587</td>
-<td align="right">0.7587</td>
-<td align="right">0.3100</td>
+<td align="right">0.9218</td>
+<td align="right">0.9218</td>
+<td align="right">0.9218</td>
+<td align="right">0.9218</td>
+<td align="right">0.1000</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
 </tr>
@@ -412,37 +392,37 @@ summ %&gt;% head(n=10) %&gt;% knitr::kable(digits=4)</code></pre>
 <td align="left">exclude</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.1248</td>
-<td align="right">0.4428</td>
-<td align="right">0.9503</td>
-<td align="right">0.4601</td>
-<td align="right">-0.8100</td>
-<td align="right">0.2286</td>
-<td align="right">0.4183</td>
+<td align="right">0.3645</td>
+<td align="right">0.7028</td>
+<td align="right">0.9882</td>
+<td align="right">0.7270</td>
+<td align="right">0.1967</td>
+<td align="right">0.1816</td>
+<td align="right">0.4045</td>
 </tr>
 <tr class="even">
 <td align="right">3</td>
 <td align="left">impute</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.3156</td>
-<td align="right">0.4022</td>
-<td align="right">0.4817</td>
-<td align="right">0.4083</td>
-<td align="right">-0.8388</td>
-<td align="right">0.0507</td>
-<td align="right">0.0925</td>
+<td align="right">0.6897</td>
+<td align="right">0.8766</td>
+<td align="right">0.9490</td>
+<td align="right">0.8397</td>
+<td align="right">-0.2062</td>
+<td align="right">0.0945</td>
+<td align="right">0.1232</td>
 </tr>
 <tr class="odd">
 <td align="right">3</td>
 <td align="left">nothing</td>
 <td align="left">FALSE</td>
 <td align="right">1</td>
-<td align="right">0.4106</td>
-<td align="right">0.4106</td>
-<td align="right">0.4106</td>
-<td align="right">0.4106</td>
-<td align="right">-0.8300</td>
+<td align="right">0.6674</td>
+<td align="right">0.6674</td>
+<td align="right">0.6674</td>
+<td align="right">0.6674</td>
+<td align="right">-0.4300</td>
 <td align="right">NA</td>
 <td align="right">NA</td>
 </tr>
@@ -451,13 +431,13 @@ summ %&gt;% head(n=10) %&gt;% knitr::kable(digits=4)</code></pre>
 <td align="left">exclude</td>
 <td align="left">TRUE</td>
 <td align="right">24</td>
-<td align="right">0.1834</td>
-<td align="right">0.6143</td>
-<td align="right">0.9601</td>
-<td align="right">0.6031</td>
-<td align="right">-0.1067</td>
-<td align="right">0.2349</td>
-<td align="right">0.6754</td>
+<td align="right">0.0328</td>
+<td align="right">0.3920</td>
+<td align="right">0.9809</td>
+<td align="right">0.4474</td>
+<td align="right">0.8692</td>
+<td align="right">0.2916</td>
+<td align="right">0.6760</td>
 </tr>
 </tbody>
 </table>
@@ -474,8 +454,6 @@ summ %&gt;% head(n=10) %&gt;% knitr::kable(digits=4)</code></pre>
 
 # ggplot(cont, aes(x=theta_bot, y=theta_top, MAKE A 3D SURFACE OF PVALS))</code></pre>
 </div>
-<div id="step0" class="section level4">
-<h4>Step 0: replicate chemla sim</h4>
 </div>
 <div id="step1" class="section level4">
 <h4>Step 1: run sims with an effect derived from literature</h4>
