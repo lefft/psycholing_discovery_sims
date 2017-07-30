@@ -1,0 +1,260 @@
+---
+title: ""
+output: 
+  html_document: 
+    css: boosh.css
+---
+
+<!-- this can be considered a "white box" system...  -->
+
+We want to simulate a realistic scenario, but we also want to understand why it works the way it does. The approach that we will take is to start by simulating a very simplified scenario, and understanding precisely how it works and which factors it is sensitive to. Then, we will iteratively make the scenario more complicated, each time pausing to ensure we understand the influence of each added layer of abstraction. What we will end up with is a scenario that has all of the parameters and sources of variation as a genuine, lexical-decision based priming study, that uses accuracy and reaction time as dependent measures, and includes by-subject and by-item crossed random effects. 
+
+  - [Step 0: replicate chemla sim](#step0)
+  - [Step 1: run sims with an effect derived from literature](#step1)
+  - [Step 2: introduce new analysis type(s)](#step2)
+  - [Step 3: introduce by-subj random effect](#step3)
+  - [Step 4: integrate with outlier introduction](#step4)
+  - [Step 5: simulate case where artificial effect is observed](#step5)
+  - [Step 6: simulate case where true effect is obscured](#step6)
+  - [Step 7: write the abstract + submit :)](#step7)
+
+```{r}
+knitr::opts_chunk$set(message=FALSE)
+
+# don't load packages until after sim is run
+run_sim <- TRUE
+if (!run_sim){
+  packs <- c("dplyr","magrittr","reshape2","ggplot2","gridExtra")
+  lefftpack::quiet_attach(packs)
+}
+source("noeffect_sims_functions.r")
+
+# want to save results on this run?
+save_res <- TRUE
+```
+
+
+
+#### Step 0: replicate chemla sim {#step0}
+
+
+```{r}
+thetas <- c(0,.025,.05,.075,.1)
+regions <- c("hi","lo")
+strats <- c("exclude","impute")
+num_sims <- 100 # 3000 # 42:40 # 2000 17:45 # 1000 4:40
+num_data_points <- 40
+
+# simulate the experiment `num_sims` many times
+sim_data <- nes_sim_data(num_sims, num_data_points, mu=0, sigma=1)
+
+# df to hold individual sim results inside of loop
+dat <- data.frame(
+  data = numeric(num_data_points), 
+  cond = rep(c("A","B"), each=num_data_points/2),
+  stringsAsFactors=FALSE
+)
+
+# make a container to catch the sim results inside of loop
+cont <- make_simshell(num_sims, thetas, strats)
+```
+
+
+```{r}
+### analyze the simulated data ---------------
+for (x in seq_len(nrow(cont))){
+  # reset the data for whatever sim we're on 
+  # (i.e. get rid of any changes from previous iteration)
+  dat$data <- sim_data[, cont$sim[x]]
+  
+  cont$diffmeans_raw[x] <- 
+    mean(dat$data[dat$cond=="A"]) - 
+    mean(dat$data[dat$cond=="B"])
+  
+  trim_top <- dat$data[
+    dat$data > quantile(dat$data, 1-cont$trim_top[x])
+  ]
+  trim_bot <- dat$data[
+    dat$data < quantile(dat$data, cont$trim_bot[x])
+  ]
+  
+  cont$trimmed_top[x] <- length(trim_top)
+  cont$trimmed_bot[x] <- length(trim_bot)
+  
+  if (cont$strat[x]=="exclude"){
+    # remove data points by setting to NA
+    dat$data[dat$data %in% c(trim_top,trim_bot)] <- NA
+  }
+  if (cont$strat[x]=="impute"){
+    # impute by replacing w the threshold
+    dat$data[dat$data %in% trim_top] <- quantile(dat$data, 1-cont$trim_top[x])
+    dat$data[dat$data %in% trim_bot] <- quantile(dat$data, cont$trim_bot[x])
+    
+    # or could impute by replacing w the grand mean...
+    # dat$data[dat$data %in% c(trim_top,trim_bot)] <- 
+    #   mean(dat$data[!dat$data %in% c(trim_top,trim_bot)])
+  }
+  # record meandiff
+  cont$diffmeans_cut[x] <- 
+    mean(dat$data[dat$cond=="A"], na.rm=TRUE) - 
+    mean(dat$data[dat$cond=="B"], na.rm=TRUE)
+  # perform t-test
+  res <- t.test(dat$data[dat$cond=="A"],
+                dat$data[dat$cond=="B"])
+  # record the results
+  cont$tval[x] <- unname(round(res$statistic, 2))
+  cont$pval[x] <- round(res$p.value, 4)
+  cont$confint[x] <- 
+    paste(round(res$conf.int, 3), collapse="||")
+  
+  # print a nice friendly message <3
+  message(paste0("okee, done w iteration ", x, 
+                 " out of ", nrow(cont)))
+}
+rm(trim_top); rm(trim_bot); rm(res)
+```
+
+
+```{r}
+### post-process sims -------------
+
+# total data points per sim
+cont$total_n <- num_data_points
+
+# total data trimmed out
+cont$trimmed_total <- cont$trimmed_top + cont$trimmed_bot
+
+# whether data was trimmed at all
+cont$is_trimmed <- ifelse(cont$trimmed_total==0, FALSE, TRUE)
+
+# recode strat of data points that are not trimmed
+cont$strat <- ifelse(!cont$is_trimmed, "nothing", cont$strat)
+
+# remove duplicate rows (shd be half of all strat=="nothing" rows)
+cont <- cont[!duplicated(cont), ]
+
+# write the sims to disk if desired
+if (save_res){
+  dnam <- paste0("out/sim_results-",num_sims,"_sims-july29.csv")
+  write.csv(cont, dnam, row.names=FALSE)
+}
+```
+
+
+```{r}
+# now load stuff if we didn't earlier
+if (run_sim){
+  packs <- c("dplyr","magrittr","reshape2","ggplot2","gridExtra")
+  lefftpack::quiet_attach(packs)
+}
+```
+
+
+```{r}
+### summarize results ---------
+
+# define some useful subsets and list them up to iterate over
+subsets <- list(
+  trim_none=cont[cont$trim_total == 0, ], 
+  trim_top=cont[cont$trim_top   != 0, ], 
+  trim_bot=cont[cont$trim_bot   != 0, ], 
+  strat_excl=cont[cont$strat=="exclude", ], 
+  strat_imp=cont[cont$strat=="impute",  ]
+)
+
+# define some useful summary funcs for simulated p-vals
+signifs <- function(df, alpha=.05){
+  table(df[["pval"]] < alpha)
+}
+prop_signif <- function(df, alpha=.05){
+  round(mean(df[["pval"]] < alpha), 4)
+}
+quant_at <- function(df, at=.05){
+  round(quantile(df[["pval"]], at), 3)
+}
+# also list them up to iterate over
+foncs <- list(signifs=signifs, prop_signif=prop_signif, quant_at=quant_at)
+
+# apply each fonc to each subset defined above
+lapply(foncs, function(f){
+  sapply(subsets, function(df) f(df))
+})
+
+
+### per-sim summaries -------------
+
+summ <- cont %>% group_by(sim, strat, is_trimmed) %>% summarize(
+  n_rows = n(),
+  min_p = min(pval), mdn_p=median(pval), max_p = max(pval), 
+  mean_p = mean(pval), mean_t = mean(tval), 
+  sd_p=sd(pval), sd_t=sd(tval)
+)
+
+summ %>% head(n=10) %>% knitr::kable(digits=4)
+```
+
+
+
+```{r}
+### plotting -------------
+
+# arrange the two plots in a nice way
+# g <- grid.arrange(pvals,tvals)
+
+# write the plot to disk if desired
+# if (save_res){
+#   pnam <- paste0("out/sim_results_plot-", num_sims,"_sims-july29.pdf")
+#   ggsave(g, filename=pnam, h=9, w=6, u="in")
+# }
+
+# ggplot(cont, aes(x=theta_bot, y=theta_top, MAKE A 3D SURFACE OF PVALS))
+
+```
+
+
+```{r eval=FALSE}
+# not run
+View(dplyr::mutate_if(cont, is.numeric, round, digits=3))
+View(dplyr::mutate_if(summ, is.numeric, round, digits=3))
+
+summ %>% group_by(sim, is_trimmed) %>% summarize(
+  min_p = min(min_p),
+  max_p = max(max_p),
+  mean_mean_p = mean(mean_p),
+  mean_mean_t = mean(mean_t)
+) %>% mutate_if(is.numeric, round, digits=3) %>% View()
+
+summ %>% group_by(sim, is_trimmed) %>% summarize(
+  min_p = min(min_p),
+  max_p = max(max_p),
+  mean_mean_p = mean(mean_p),
+  mean_mean_t = mean(mean_t)
+) %>% group_by(is_trimmed) %>% summarize(
+  n = n(),
+  num_fp = sum(min_p < .05),
+  prop_fp = num_fp / n,
+  mean_min_p = mean(min_p),
+  mean_mean_mean_t = mean(mean_mean_t)
+) %>% 
+  mutate_if(is.numeric, round, digits=3) %>% View()
+
+
+```
+
+
+
+#### Step 1: run sims with an effect derived from literature {#step1}
+
+#### Step 2: introduce new analysis type{s} {#step2}
+
+#### Step 3: introduce by-subj random effect {#step3}
+
+#### Step 4: integrate with outlier introduction {#step4}
+
+#### Step 5: simulate case where artificial effect is observed {#step5}
+
+#### Step 6: simulate case where true effect is obscured {#step6}
+
+#### Step 7: write the abstract + submit :) {#step7}
+
+

@@ -5,7 +5,6 @@ output:
     css: boosh.css
 ---
 
-
 ### False discovery and friends in psycholinguistics 
 
 **[Timothy Leffel](http://lefft.xyz), NORC at U Chicago**   
@@ -185,6 +184,9 @@ plot_results(dat, rt_col="rt_zsc")
 ```
 
 
+
+<br><br><br>
+<hr style="size: 40px; color: orange;">
 
 
 

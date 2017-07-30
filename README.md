@@ -63,6 +63,18 @@ repo contents, notes to self, TODO list below.
 	> 
 	> ...
 
+<br>
 
 
+##### estimates of mean/sd/effect size in rt priming studies
+<hr>
+
+- holcomb-neville 1990 lcp: 
+	> visual 
+		- 
+		- 
+		
+	> auditory  
+	> 
+	> ...
 
