@@ -79,4 +79,15 @@ se_prop <- function(p, n, dig=4){
 }
 
 
+# pooled sd -- used in d calculation
+sd_pool <- function(x,y){
+  sdx <- sd(x)
+  sdy <- sd(y)
+  sqrt((sdx^2 + sdy^2)/2)
+}
+# "cohen's" d -- effect size
+get_d <- function(x,y){
+  (mean(x) - mean(y)) / sd_pool(x,y)
+}
 
+# get_d(rnorm(1e5,.5,1), rnorm(1e5,0,1))

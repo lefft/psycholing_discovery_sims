@@ -51,7 +51,7 @@ strats  <- c("exclude", "impute_theta", "impute_gmean", "impute_cmean")
 
 # total trials per dataset, and num simmed datasets
 num_data_points <- 40
-num_sims        <- 2001
+num_sims        <- 100
 
 # grand mean and sd within each sim
 grand_mu    <- 700
@@ -79,6 +79,60 @@ dat <- data.frame(
 
 # make a container to catch the sim results inside of loop
 cont <- make_simshell(num_sims, thetas, strats)
+```
+
+
+##### 0.3alt set up sim for real data [chunk not visible and not executed]
+
+```{r include=FALSE, eval=FALSE, echo=FALSE}
+# use rt data from psycholing class
+expfile <- "ignore/data/results-teaching_expt/results-nov22-clean.csv"
+exp_dat <- read.csv(expfile, stringsAsFactors=FALSE)
+
+# bad ones already tossed: table(exp_dat$correct, useNA="ifany")
+# table(exp_dat$condition, useNA="ifany"); hist(exp_dat$RT)
+
+# relabel the conditions we want to compare
+cond_lkup <- c(cond_rel_word="A", cond_unr_word="B")
+
+# build a df
+dat <- data.frame(
+  data = exp_dat$RT[exp_dat$condition %in% names(cond_lkup)],
+  cond = cond_lkup[exp_dat$condition[exp_dat$condition %in% names(cond_lkup)]],
+  stringsAsFactors=FALSE
+)
+# hyp is that A is faster/smaller than B
+
+
+# thresholds, regions, strategies to consider
+thetas  <- c(0, .025, .05, .075, .1)
+regions <- c("hi", "lo") # inactive
+strats  <- c("exclude", "impute_theta", "impute_gmean", "impute_cmean") 
+
+# total trials per dataset, and num simmed datasets
+num_data_points <- length(dat$data)
+num_sims        <- 1
+
+# grand mean and sd within each sim
+grand_mu    <- mean(dat$data)
+grand_sigma <- sd(dat$data)
+
+
+# need to make sim_data and cont also
+
+# make sim_data -- just a num_data_points*1 matrix since this is real data
+sim_data <- matrix(dat$data, ncol=1)
+
+# make cont -- just will have slots for one sim
+cont <- make_simshell(num_sims=num_sims, thetas=thetas, strats=strats)
+
+# reset dat since we're storing the real data in sim_data
+dat <- data.frame(
+  data = numeric(num_data_points), 
+  cond = cond_lkup[exp_dat$condition[exp_dat$condition %in% names(cond_lkup)]],
+  stringsAsFactors=FALSE
+)
+
 ```
 
 

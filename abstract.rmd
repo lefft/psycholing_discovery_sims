@@ -1,0 +1,23 @@
+---
+author: "timothy leffel"
+date: "July 31, 2017"
+output: pdf_document
+fontsize: 10pt
+geometry: margin=1in
+---
+
+\thispagestyle{empty}
+
+
+### background
+
+
+### simulation setup
+
+
+### results
+
+
+### conclusions 
+
+

@@ -29,6 +29,7 @@ inspiration comes in part from this very nice/concise/thought-provoking [note by
 
 next: impute w mean; impute w mean +/- sd of non-missing
 
+	> TODO: write func for sampling from real data + simming that
 	> TODO: parameterize `noeffect_sim` for easier exploration
 	> TODO: fix axis ranges + ticks for comparison across sims
 	> TODO: see what the diff is for false *negatives* -- 
