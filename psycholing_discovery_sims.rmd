@@ -2,7 +2,7 @@
 title: ""
 output: 
   html_document: 
-    css: boosh.css
+    css: in/boosh.css
 ---
 
 ### False discovery and friends in psycholinguistics 
