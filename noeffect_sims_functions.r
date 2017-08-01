@@ -2,13 +2,25 @@
 
 # simulate a simple experiment num_sims many times, return result as a matrix
 nes_sim_data <- function(num_sims, num_data_points, mu, sigma){
-  # TODO: allow for different prob dist's other than normal...
-  # TODO: allow to have different params for diff groups/splits/etc.
+  
+  # matrix(replicate(
+  #   num_sims, 
+  #   sn::rsn(num_data_points, xi=550, omega=200, alpha=4),
+  #   # rnorm(num_data_points, mean=mu, sd=sigma), 
+  #   simplify=TRUE
+  # ), nrow=num_data_points, ncol=num_sims)
+  
+  # [THIS IS THE NORMAL ONE -- JUST COMMENTING FOR QUICK SKEWNORMAL RUN 9PM]
   matrix(replicate(
-    num_sims, 
-    rnorm(num_data_points, mean=mu, sd=sigma), 
+    num_sims,
+    rnorm(num_data_points, mean=mu, sd=sigma),
     simplify=TRUE
   ), nrow=num_data_points, ncol=num_sims)
+  
+  
+  # TODO: allow for different prob dist's other than normal...[SKEWNORMAL]
+  # TODO: allow to have different params for diff groups/splits/etc.
+  # TODO: allow to add random noise(???)
 }
 
 # make a shell with a summary of each sim iteration
@@ -18,6 +30,7 @@ make_simshell <- function(num_sims, thetas, strats){
   n_ths <- length(thetas)
   out <- data.frame(
     sim=rep(seq_len(num_sims), each=rows_per_sim), 
+    # TODO: FIX THIS -- IT WONT GENERALIZE UGHHHH
     trim_top=rep(rep(thetas, each=n_ths*2), times=num_sims),
     trim_bot=rep(rep(thetas, times=n_ths*2), times=num_sims),
     strat=rep(rep(strats, each=n_ths, times=n_ths), times=num_sims),

@@ -51,11 +51,12 @@ strats  <- c("exclude", "impute_theta", "impute_gmean", "impute_cmean")
 
 # total trials per dataset, and num simmed datasets
 num_data_points <- 40
-num_sims        <- 100
+num_sims        <- 1000
 
 # grand mean and sd within each sim
-grand_mu    <- 700
-grand_sigma <- 100
+# [CHANGING THESE TO NONSENSE BC HACKING THE SKEW NORMAL FOR NOW]
+grand_mu    <- 700 # 1234
+grand_sigma <- 100 # 5678
 ```
 
 
@@ -82,57 +83,56 @@ cont <- make_simshell(num_sims, thetas, strats)
 ```
 
 
-##### 0.3alt set up sim for real data [chunk not visible and not executed]
+<!-- ##### 0.3alt set up sim for real data [chunk not visible and not executed] -->
+<!-- usually dont want to run this -->
+<!-- include=FALSE, eval=FALSE, echo=FALSE -->
 
 ```{r include=FALSE, eval=FALSE, echo=FALSE}
 # use rt data from psycholing class
 expfile <- "ignore/data/results-teaching_expt/results-nov22-clean.csv"
-exp_dat <- read.csv(expfile, stringsAsFactors=FALSE)
-
-# bad ones already tossed: table(exp_dat$correct, useNA="ifany")
-# table(exp_dat$condition, useNA="ifany"); hist(exp_dat$RT)
+exp_dat <- read.csv(expfile, stringsAsFactors=FALSE); rm(expfile)
 
 # relabel the conditions we want to compare
 cond_lkup <- c(cond_rel_word="A", cond_unr_word="B")
 
-# build a df
-dat <- data.frame(
-  data = exp_dat$RT[exp_dat$condition %in% names(cond_lkup)],
-  cond = cond_lkup[exp_dat$condition[exp_dat$condition %in% names(cond_lkup)]],
-  stringsAsFactors=FALSE
-)
-# hyp is that A is faster/smaller than B
+# cut the data to just the points we want
+exp_dat <- exp_dat[exp_dat$condition %in% names(cond_lkup), c("RT","condition")]
+
+# ggplot(exp_dat, aes(x=RT)) + geom_histogram(binwidth=25) 
+# ggplot(exp_dat, aes(x=RT)) + geom_density(fill="darkgreen", alpha=.5) 
+# ggplot(exp_dat, aes(x=RT, fill=condition)) + geom_density() 
+
+# then make a df w a normal dist, a skew normal dist, and plot them
+# put the plot in paper maybe
+# also plot an rt dataset from external source -- if skn, provides motivation
+# the run the sim w a skew normal dist instead of normal + write it up...
 
 
 # thresholds, regions, strategies to consider
-thetas  <- c(0, .025, .05, .075, .1)
-regions <- c("hi", "lo") # inactive
-strats  <- c("exclude", "impute_theta", "impute_gmean", "impute_cmean") 
-
+thetas  <- c(0, .05, .1)
+strats  <- c("exclude", "impute_gmean", "impute_cmean", "impute_theta")
 # total trials per dataset, and num simmed datasets
-num_data_points <- length(dat$data)
-num_sims        <- 1
-
+num_data_points <- length(exp_dat$RT)
+num_sims        <- 1007
 # grand mean and sd within each sim
-grand_mu    <- mean(dat$data)
-grand_sigma <- sd(dat$data)
-
-
-# need to make sim_data and cont also
-
-# make sim_data -- just a num_data_points*1 matrix since this is real data
-sim_data <- matrix(dat$data, ncol=1)
-
+grand_mu    <- mean(exp_dat$RT)
+grand_sigma <- sd(exp_dat$RT)
+# make sim_data -- can either: 
+#   - just make a num_data_points*1 matrix since this is real data
+#   - resample the data for each simulation
+sim_data <- matrix(
+  replicate(num_sims, sample(exp_dat$RT, replace=TRUE)), 
+  ncol=num_sims
+)
 # make cont -- just will have slots for one sim
+# [PROBLEM: WONT RLY WORK FOR ODD NUM OF STRATS + ODD NUM OF TH'S...]
 cont <- make_simshell(num_sims=num_sims, thetas=thetas, strats=strats)
-
 # reset dat since we're storing the real data in sim_data
 dat <- data.frame(
   data = numeric(num_data_points), 
   cond = cond_lkup[exp_dat$condition[exp_dat$condition %in% names(cond_lkup)]],
   stringsAsFactors=FALSE
 )
-
 ```
 
 
@@ -193,6 +193,20 @@ for (x in seq_len(nrow(cont))){ # dev x=36
   # TODO: also impute by-subj mean + by-item mean
   # TODO: also impute w that one method in screencap
   
+  # if (cont$strat[x]=="lm_exclude"){
+  #   # remove outlier data points by setting to NA
+  #   dat$data[dat$data %in% trim] <- NA
+  #   
+  # }
+  # if (cont$strat[x]=="lm_nothing"){
+  #   # just run the model
+  #   
+  # }
+  # if (cont$strat[x]=="lm_covar"){
+  #   # add a predictor for `is_outlier` then fit the model w it
+  #   # q: w or w/o interactiono term?!
+  #   
+  # }
   
   # record meandiff after outliers have been transformed or removed (or not)
   cont$diffmeans_cut[x] <- 

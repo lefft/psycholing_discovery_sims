@@ -8,16 +8,76 @@ geometry: margin=1in
 
 \thispagestyle{empty}
 
+outline: 
 
-### background
+- meth papers
+- chemla post
+- skewnormal dist
+- results
+- conclusions: 
+    - future directions
+    - practical implications
+
+\newpage
+
+### Background
+
+The collection and analysis of experimental data requires many small decisions to be made by the researcher: how many participants should be sought to achieve adequate statistical power? How many items should each condition have? Some of these decisions are more important than others, and some may not *feel* important at all. However, recent investigations have shown that many small adjustments in measurement or data screening in experimental studies can have meaningful, unintended (and probably often *undetected*) consequences on the results of statistical analyses. 
+
+The importance of certain analysis decisions can be quantified using simulations that mimick the structure of an experiment of interest. In this presentation we report the results of simulations designed to evaluate the degree to which flexible outlier exclusion strategies can increase false-positive rates in experiments with reaction times as the dependent measure. 
+
+The main finding is that ...
 
 
-### simulation setup
+One particularly common analysis decision that will almost inevitably be encountered in a reaction time (RT) based experiment is that of *outlier exclusion*. Sets of reaction times frequently have approximately log-normal distributions, with potentially very long tails due to a small number of data points that lie several standard deviations above the mean. Some of these outliers will be due to the participant temporarily losing attention or, say, sneezing just before they are meant to react to a stimulus. Clearly such data points should be excluded or somehow otherwise systematically replaced before the results are statistically analyzed. What is less clear is precisely *where the cutoff point for exclusion should be made*. 
+
+Perhaps the most prevalent approach to outlier exclusion is to apply predefined rules along the lines of: "we will exclude any RT more than two standard deviations above the mean" or "we will replace RT's less than 100ms with the global mean." Another not-unheard-of approach -- "eyeballing it" -- is simply to inspect the data, (somewhat) subjectively decide which data points will be considered "outliers", and then to remove or impute them. 
 
 
-### results
+### Simulation Setup 
+
+
+
+
+### Results 
+
+- among best pvals, which trimming strat responsible for most fp's?
+- same q but for trim amount (will prob be maximal)
+- between sims, which strat leads to more fp's?
+- between sim types, which dist leads to more fp's, and interaction w strategy and trim amount?
 
 
 ### conclusions 
 
 
+
+<!-- SCRATCH AREA AND SCRATCH CHUNK -->
+<!--  
+  - ...
+  - ...
+-->
+```{r eval=FALSE, echo=FALSE, include=FALSE}
+sn::rsn() # and rsc() for cauchy and rst() for t
+
+# xi = "mean"; omega = "spread/scale" (bigger = bigger range of vals) 
+# alpha = "skew/slant" (bigger = more mass to left; more negative = more right)
+hist(sn::rsn(1e5, xi=600, omega=200, alpha=4), breaks=25)
+
+fake <- sn::rsn(1e5, xi=550, omega=200, alpha=4)
+real <- exp_dat$RT
+c(fake_mean=mean(fake), real_mean=mean(real))
+c(fake_sd=sd(fake), real_sd=sd(real))
+
+# c(fake_sd=sd(fake), real_sd=sd(real))
+#  fake_sd  real_sd 
+# 126.8016 190.7670 
+
+```
+
+
+
+
+
+<!-- To the extent that the impact of seemingly minor analysis decisions can be measured, it is worth doing so -- if for no other reason than sleeping easier at night.  -->
+
+<!-- There is an increasing pressure to conform to... at the same time ling data presents its own challenges ...  -->
